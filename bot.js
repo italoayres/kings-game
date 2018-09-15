@@ -12,30 +12,9 @@
 		"chat_active": [0, 0],
 		"selected_title": [1, 0, 5, 3, 0, 1, 1, 0, 0, 0, 0]
 	};
-
-	const jokeList = [
-		`
-		Husband and Wife had a Fight.
-		Wife called Mom : He fought with me again,
-		I am coming to you.
-		Mom : No beta, he must pay for his mistake,
-		I am comming to stay with U!`,
-
-		`
-		Husband: Darling, years ago u had a figure like Coke bottle.
-		Wife: Yes darling I still do, only difference is earlier it was 300ml now it's 1.5 ltr.`,
-
-		`
-		God created the earth, 
-		God created the woods, 
-		God created you too, 
-		But then, even God makes mistakes sometimes!`,
-
-		`
-		What is a difference between a Kiss, a Car and a Monkey? 
-		A kiss is so dear, a car is too dear and a monkey is U dear.`
-	]
-
+	//var gameInstance = new Game();
+  var gameInstances = {};
+	
 
 	//
 	// FUNCTIONS
@@ -65,7 +44,7 @@
 		var messages = document.querySelectorAll('.msg');
 		var pos = messages.length-1;
 		
-		while (messages[pos] && (messages[pos].classList.contains('msg-system') || messages[pos].querySelector('.message-out'))){
+		while (messages[pos] && (messages[pos].classList.contains('msg-system'))){
 			pos--;
 			if (pos <= -1){
 				return false;
@@ -88,6 +67,9 @@
 					continue;
 				}
 				var icons = getElement("chat_icons", chats[i]).childNodes;
+				
+				unreadchats.push(chats[i]);			
+				continue;
 				if (!icons){
 					continue;
 				}
@@ -127,7 +109,7 @@
 	const goAgain = (fn, sec) => {
 		// const chat = document.querySelector('div.chat:not(.unread)')
 		// selectChat(chat)
-		setTimeout(fn, sec * 1000)
+		setTimeout(fn, sec * 100) // 1000
 	}
 
 	// Dispath an event (of click, por instance)
@@ -150,7 +132,7 @@
 					return loopFewTimes();
 				}
 				return cb();
-			}, 300);
+			}, 100); //300
 		}
 
 		loopFewTimes();
@@ -207,7 +189,7 @@
 		}
 		
 		if (!processLastMsgOnChat && (chats.length == 0 || !chat)) {
-			console.log(new Date(), 'nothing to do now... (1)', chats.length, chat);
+			//console.log(new Date(), 'nothing to do now... (1)', chats.length, chat);
 			return goAgain(start, 3);
 		}
 
@@ -221,36 +203,79 @@
 		}
 		// avoid sending duplicate messaegs
 		if (ignoreLastMsg[title] && (ignoreLastMsg[title]) == lastMsg) {
-			console.log(new Date(), 'nothing to do now... (2)', title, lastMsg);
+			//console.log(new Date(), 'nothing to do now... (2)', title, lastMsg);
 			return goAgain(() => { start(chats, cnt + 1) }, 0.1);
 		}
 
 		// what to answer back?
-		let sendText
+		let sendText, maxCmdLength = 12;
+    
+    if(lastMsg.length < maxCmdLength && (lastMsg[0]=="@" || lastMsg.length==5)) {
+      // Its a command
+      
+      if (lastMsg.toUpperCase().indexOf('@HELP') > -1){
+        sendText = msg_help;
+      }
 
-		if (lastMsg.toUpperCase().indexOf('@HELP') > -1){
-			sendText = `
-				Cool ${title}! Some commands that you can send me:
+      if (lastMsg.toUpperCase().indexOf('@RULES') > -1){
+        sendText = msg_rules;
+      }
 
-				1. *@TIME*
-				2. *@JOKE*`
-		}
+      if (lastMsg.toUpperCase().indexOf('@MATE') > -1) {
+        if(gameInstances[title]) {
+          gameInstances[title].resign();
+          sendText = `Game finished. Winner ${gameInstances[title].lastMove}
+          Score: ${gameInstances[title].getScore()}`;
+        }
+        
+      }
 
-		if (lastMsg.toUpperCase().indexOf('@TIME') > -1){
-			sendText = `
-				Don't you have a clock, dude?
+      if (lastMsg.toUpperCase().indexOf('@NEW') > -1){
+          console.log("CMD: @new");
+          if(!gameInstances[title]) {
+            console.log("CMD: New opponent ", title);
+            gameInstances[title] = new Game();
+          };
+          gameInstances[title].newGame();
+          sendText = gameInstances[title].printBoard();		
+      }
 
-				*${new Date()}*`
-		}
+      if (lastMsg.toUpperCase().indexOf('@HERO') > -1){
+        if(gameInstances[title]) {
+          let cmd = lastMsg.split(" ");
+          if(cmd.length == 1) {
+            sendText = "*Lista de Heróis*" + "```" + `
+            ${gameInstances[title].getHeroes()} `+ "```" +`
+            
+            *@config hero 1 23*`; 
 
-		if (lastMsg.toUpperCase().indexOf('@JOKE') > -1){
-			sendText = jokeList[rand(jokeList.length - 1)];
-		}
+          } else if (cmd.length == 2) {          
+            gameInstances[title].setRandomHero(cmd[1]);
+            sendText = gameInstances[title].printBoard();
+          } else if (cmd.length == 3){
+            gameInstances[title].setHero(cmd[1], cmd[2]);
+            sendText = gameInstances[title].printBoard();
+          } else {
+            sendText = "*Parametros incorretos.*"
+          }
+        } 
+      }
+
+      if (lastMsg.length == 5) { // check if is command  
+        if(lastMsg.split(" ").length==2 && lastMsg.split(" ")[0].length==2 && lastMsg.split(" ")[1].length==2) {
+          console.log("CMD ->" + lastMsg);            
+          if(gameInstances[title] && gameInstances[title].moveCmd(lastMsg)) {
+            sendText = gameInstances[title].printBoard();    
+          }			
+        }
+      }
+    
+    } // commands
 		
 		// that's sad, there's not to send back...
 		if (!sendText) {
 			ignoreLastMsg[title] = lastMsg;
-			console.log(new Date(), 'new message ignored -> ', title, lastMsg);
+			//console.log(new Date(), 'new message ignored -> ', title, lastMsg);
 			return goAgain(() => { start(chats, cnt + 1) }, 0.1);
 		}
 
@@ -270,4 +295,60 @@
 		}
 	}
 	start();
+
+
+var msg_help =
+  `
+▬▬▬▬▬ஜ۩۞۩ஜ▬▬▬▬▬▬
+                 *KINGS*
+▬▬▬▬▬ஜ۩۞۩ஜ▬▬▬▬▬▬
+Comandos:
+ *@new*
+ *@rules*
+ *@config* [hero <player> <char>]
+ *@mate*
+`
+
+var msg_rules = `╔═════════╗
+    *Como Jogar?*
+╚═════════╝
+*(\\__/) ||*
+*(•ㅅ•) ||*
+*/ 　 づ*
+
+*@new* - Cria novo jogo.
+*@mate* - Fim de jogo, aitória do jogador que fez o último lance.
+
+*Regras:*
+─────────────────
+*Kings* é um jogo simples. Todas as peças podem se mover na *vertical, horizontal ou diagonal*, mas sempre até o *limite* possivel.
+As peças sempre param o movimento ou quando alcançam a *borda* do tabuleiro, ou logo antes de *outra peça* na mesma coluna, linha ou diagonal.
+
+O jogo é jogado num tabuleiro 5x5, cada jogador começa com 5 peças em lados opostos do tabuleiro. 
+O *objetivo* é se tornar o *Rei*, ocupando o quadrado central *C3* ▪ com o seu *Herói*, representado pela peça diferenciada. 
+Peças: 🔹 ⭕ ⚫ etc.
+Heróis: ♿ 📛 🐧 etc.
+
+─────────────────
+Uma *peça* é representada pelas suas *coordenadas* no formato: 
+_letra da coluna número da linha_ Ex.: *a1*
+Para movimentar as peças use as coordenadas do movimento no formato:
+_origem destino_ Ex.: *a1 e4*
+
+No caso abaixo, o *Herói* 📛 se encontra na posição *c5*. 
+Os movimentos possíveis para essa peça são: *a3 c2 d4* (marcados com ✖).
+
+┌────────────┐
+5 ⭕⭕📛⭕▫
+4 ▫▫▫✖▫
+3 ✖▫▪▫⭕
+2 ▫▫✖▫🔹
+1 🔹🔹♿▫🔹
+      a    b    c  d  e 
+└────────────┘
+
+Peças normais podem *atravessar* o quadrado central, mas *não* podem parar nele.
+Se o *Herói* de algum jogador for *bloqueado* e não possuir movimentos válidos, o jogador *perde* a partida.
+
+` 
 })()
